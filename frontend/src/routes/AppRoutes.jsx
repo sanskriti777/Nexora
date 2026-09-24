@@ -16,6 +16,8 @@ import ResetPasswordPage from '../pages/ResetPasswordPage';
 
 // Business Pages
 import DashboardPage from '../pages/DashboardPage';
+import ProjectsPage from '../pages/ProjectsPage';
+import ProjectDetailsPage from '../pages/ProjectDetailsPage';
 import ProfilePage from '../pages/ProfilePage';
 import ModulePlaceholderPage from '../pages/ModulePlaceholderPage';
 import HealthPage from '../pages/HealthPage';
@@ -69,18 +71,9 @@ export const AppRoutes = () => {
         <Route element={<AppShell />}>
           <Route path="dashboard" element={<DashboardPage />} />
 
-          {/* Work Management Module Placeholders */}
-          <Route
-            path="projects"
-            element={
-              <ModulePlaceholderPage
-                title="Projects"
-                subtitle="Manage and organize your workspace projects in one place."
-                icon="📁"
-                phaseNote="Projects module will be implemented in the next phase."
-              />
-            }
-          />
+          {/* Work Management Module Routes */}
+          <Route path="projects" element={<ProjectsPage />} />
+          <Route path="projects/:projectId" element={<ProjectDetailsPage />} />
           <Route
             path="tasks"
             element={
