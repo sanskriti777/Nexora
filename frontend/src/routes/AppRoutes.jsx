@@ -20,6 +20,9 @@ import ProjectsPage from '../pages/ProjectsPage';
 import ProjectDetailsPage from '../pages/ProjectDetailsPage';
 import TasksPage from '../pages/TasksPage';
 import TaskDetailsPage from '../pages/TaskDetailsPage';
+import KanbanPage from '../pages/KanbanPage';
+import TeamsPage from '../pages/TeamsPage';
+import TeamDetailsPage from '../pages/TeamDetailsPage';
 import ProfilePage from '../pages/ProfilePage';
 import ModulePlaceholderPage from '../pages/ModulePlaceholderPage';
 import HealthPage from '../pages/HealthPage';
@@ -78,17 +81,7 @@ export const AppRoutes = () => {
           <Route path="projects/:projectId" element={<ProjectDetailsPage />} />
           <Route path="tasks" element={<TasksPage />} />
           <Route path="tasks/:taskId" element={<TaskDetailsPage />} />
-          <Route
-            path="kanban"
-            element={
-              <ModulePlaceholderPage
-                title="Kanban Board"
-                subtitle="Visual task lifecycle across To Do, In Progress, Review, and Done."
-                icon="📋"
-                phaseNote="Kanban board will be implemented in the next phase."
-              />
-            }
-          />
+          <Route path="kanban" element={<KanbanPage />} />
           <Route
             path="calendar"
             element={
@@ -101,18 +94,10 @@ export const AppRoutes = () => {
             }
           />
 
-          {/* Collaboration Module Placeholders */}
-          <Route
-            path="teams"
-            element={
-              <ModulePlaceholderPage
-                title="Teams"
-                subtitle="Manage workspace teams, departments, and members."
-                icon="👥"
-                phaseNote="Teams module will be implemented in the next phase."
-              />
-            }
-          />
+          {/* Collaboration Module Routes */}
+          <Route path="teams" element={<TeamsPage />} />
+          <Route path="teams/:teamId" element={<TeamDetailsPage />} />
+          <Route path="workspace/members" element={<TeamsPage defaultTab="members" />} />
           <Route
             path="chat"
             element={
