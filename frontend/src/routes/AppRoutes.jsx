@@ -21,6 +21,7 @@ import ProjectDetailsPage from '../pages/ProjectDetailsPage';
 import TasksPage from '../pages/TasksPage';
 import TaskDetailsPage from '../pages/TaskDetailsPage';
 import KanbanPage from '../pages/KanbanPage';
+import CalendarPage from '../pages/CalendarPage';
 import TeamsPage from '../pages/TeamsPage';
 import TeamDetailsPage from '../pages/TeamDetailsPage';
 import ProfilePage from '../pages/ProfilePage';
@@ -82,17 +83,7 @@ export const AppRoutes = () => {
           <Route path="tasks" element={<TasksPage />} />
           <Route path="tasks/:taskId" element={<TaskDetailsPage />} />
           <Route path="kanban" element={<KanbanPage />} />
-          <Route
-            path="calendar"
-            element={
-              <ModulePlaceholderPage
-                title="Calendar"
-                subtitle="Schedule milestones, delivery deadlines, and task timelines."
-                icon="📅"
-                phaseNote="Calendar module will be implemented in the next phase."
-              />
-            }
-          />
+          <Route path="calendar" element={<CalendarPage />} />
 
           {/* Collaboration Module Routes */}
           <Route path="teams" element={<TeamsPage />} />

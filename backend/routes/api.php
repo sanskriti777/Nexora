@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\AuthController;
+use App\Http\Controllers\CalendarController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\ProjectController;
 use App\Http\Controllers\TaskController;
@@ -67,4 +68,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::patch('/tasks/{task}', [TaskController::class, 'update']);
     Route::delete('/tasks/{task}', [TaskController::class, 'destroy']);
     Route::get('/projects/{project}/tasks', [TaskController::class, 'projectTasks']);
+
+    // Calendar endpoint
+    Route::get('/calendar', [CalendarController::class, 'index']);
 });
