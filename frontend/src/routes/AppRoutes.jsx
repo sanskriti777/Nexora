@@ -18,6 +18,8 @@ import ResetPasswordPage from '../pages/ResetPasswordPage';
 import DashboardPage from '../pages/DashboardPage';
 import ProjectsPage from '../pages/ProjectsPage';
 import ProjectDetailsPage from '../pages/ProjectDetailsPage';
+import TasksPage from '../pages/TasksPage';
+import TaskDetailsPage from '../pages/TaskDetailsPage';
 import ProfilePage from '../pages/ProfilePage';
 import ModulePlaceholderPage from '../pages/ModulePlaceholderPage';
 import HealthPage from '../pages/HealthPage';
@@ -74,17 +76,8 @@ export const AppRoutes = () => {
           {/* Work Management Module Routes */}
           <Route path="projects" element={<ProjectsPage />} />
           <Route path="projects/:projectId" element={<ProjectDetailsPage />} />
-          <Route
-            path="tasks"
-            element={
-              <ModulePlaceholderPage
-                title="Tasks"
-                subtitle="Track tasks, assignees, priorities, and workflow progress."
-                icon="✓"
-                phaseNote="Tasks module will be implemented in the next phase."
-              />
-            }
-          />
+          <Route path="tasks" element={<TasksPage />} />
+          <Route path="tasks/:taskId" element={<TaskDetailsPage />} />
           <Route
             path="kanban"
             element={
