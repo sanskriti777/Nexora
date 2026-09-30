@@ -24,6 +24,7 @@ import KanbanPage from '../pages/KanbanPage';
 import CalendarPage from '../pages/CalendarPage';
 import TeamsPage from '../pages/TeamsPage';
 import TeamDetailsPage from '../pages/TeamDetailsPage';
+import ChatPage from '../pages/ChatPage';
 import ProfilePage from '../pages/ProfilePage';
 import ModulePlaceholderPage from '../pages/ModulePlaceholderPage';
 import HealthPage from '../pages/HealthPage';
@@ -89,17 +90,7 @@ export const AppRoutes = () => {
           <Route path="teams" element={<TeamsPage />} />
           <Route path="teams/:teamId" element={<TeamDetailsPage />} />
           <Route path="workspace/members" element={<TeamsPage defaultTab="members" />} />
-          <Route
-            path="chat"
-            element={
-              <ModulePlaceholderPage
-                title="Chat"
-                subtitle="Direct messages and team channels for workspace collaboration."
-                icon="💬"
-                phaseNote="Chat module will be implemented in the next phase."
-              />
-            }
-          />
+          <Route path="chat" element={<ChatPage />} />
 
           {/* Files & Notifications Module Placeholders */}
           <Route

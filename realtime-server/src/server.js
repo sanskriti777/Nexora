@@ -21,6 +21,8 @@ const io = new SocketIOServer(httpServer, {
   pingInterval: 25000,
 });
 
+app.set('io', io);
+
 initSockets(io);
 
 /**

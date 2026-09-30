@@ -1,6 +1,7 @@
 import express from 'express';
 import cors from 'cors';
 import { isDBConnected } from './config/database.js';
+import { createChatRoutes } from './routes/chatRoutes.js';
 
 /**
  * Configure and return Express application
@@ -27,8 +28,8 @@ export function createApp(options = {}) {
         return callback(new Error(`CORS origin not allowed: ${origin}`));
       },
       credentials: true,
-      methods: ['GET', 'POST', 'OPTIONS'],
-      allowedHeaders: ['Content-Type', 'Authorization'],
+      methods: ['GET', 'POST', 'PATCH', 'PUT', 'DELETE', 'OPTIONS'],
+      allowedHeaders: ['Content-Type', 'Authorization', 'X-Workspace-Id'],
     })
   );
 
@@ -53,6 +54,9 @@ export function createApp(options = {}) {
       mongodb: 'disconnected',
     });
   });
+
+  // Mount Chat REST API
+  app.use('/api/chat', createChatRoutes(options));
 
   return app;
 }
