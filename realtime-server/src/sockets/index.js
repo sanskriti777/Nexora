@@ -3,9 +3,11 @@ import { conversationRepository } from '../repositories/conversationRepository.j
 import { channelRepository } from '../repositories/channelRepository.js';
 import { messageRepository } from '../repositories/messageRepository.js';
 import { chatService } from '../services/chatService.js';
+import { presenceManager } from '../services/presenceService.js';
+import { hasWorkspaceAccess } from '../utils/workspaceAuth.js';
 
 /**
- * Initialize Socket.IO server handlers and authentication middleware
+ * Initialize Socket.IO server handlers, presence management, and authentication middleware
  *
  * @param {import('socket.io').Server} io
  * @param {object} [options]
@@ -19,6 +21,11 @@ export function initSockets(io, options = {}) {
     const userId = user?.id;
     console.log(`[Socket.IO] Client connected: ${socket.id} (User: ${user?.name || 'Anonymous'}, ID: ${userId})`);
 
+    // Track active socket connection in in-memory presence manager
+    if (userId) {
+      presenceManager.addSocket(userId, socket.id);
+    }
+
     // Infrastructure test event: realtime:ping -> realtime:pong
     socket.on('realtime:ping', () => {
       socket.emit('realtime:pong', {
@@ -26,16 +33,72 @@ export function initSockets(io, options = {}) {
       });
     });
 
-    // Room join: Workspace
-    socket.on('chat:join:workspace', ({ workspaceId }, callback) => {
-      if (!workspaceId) return callback?.({ success: false, message: 'workspaceId required' });
-      socket.join(`workspace:${workspaceId}`);
-      callback?.({ success: true, room: `workspace:${workspaceId}` });
+    // Room join: Workspace (authorizes workspace access & updates presence)
+    socket.on('chat:join:workspace', async ({ workspaceId }, callback) => {
+      try {
+        if (!workspaceId) return callback?.({ success: false, message: 'workspaceId required' });
+        const wsId = Number(workspaceId);
+
+        // Authoritative workspace validation using Laravel
+        const allowed = await hasWorkspaceAccess(socket.data.token, wsId, options.laravelApiUrl);
+        if (!allowed) {
+          return callback?.({ success: false, message: 'Unauthorized: No access to this workspace' });
+        }
+
+        socket.join(`workspace:${wsId}`);
+        presenceManager.joinWorkspace(userId, wsId);
+
+        // Broadcast presence update to authorized workspace members
+        io.to(`workspace:${wsId}`).emit('presence:update', {
+          userId,
+          status: 'online',
+        });
+
+        const onlineUserIds = presenceManager.getOnlineUsersInWorkspace(wsId);
+        callback?.({ success: true, room: `workspace:${wsId}`, onlineUserIds });
+      } catch (err) {
+        callback?.({ success: false, message: err.message });
+      }
     });
 
     // Room leave: Workspace
     socket.on('chat:leave:workspace', ({ workspaceId }) => {
-      if (workspaceId) socket.leave(`workspace:${workspaceId}`);
+      if (workspaceId) {
+        const wsId = Number(workspaceId);
+        socket.leave(`workspace:${wsId}`);
+        presenceManager.leaveWorkspace(userId, wsId);
+      }
+    });
+
+    // Presence Subscription: Scoped to authorized workspace
+    socket.on('presence:subscribe', async ({ workspaceId }, callback) => {
+      try {
+        if (!workspaceId) return callback?.({ success: false, message: 'workspaceId required' });
+        const wsId = Number(workspaceId);
+
+        const allowed = await hasWorkspaceAccess(socket.data.token, wsId, options.laravelApiUrl);
+        if (!allowed) {
+          return callback?.({ success: false, message: 'Unauthorized workspace access' });
+        }
+
+        socket.join(`workspace:${wsId}`);
+        presenceManager.joinWorkspace(userId, wsId);
+
+        // Broadcast online presence to workspace
+        io.to(`workspace:${wsId}`).emit('presence:update', {
+          userId,
+          status: 'online',
+        });
+
+        const onlineUserIds = presenceManager.getOnlineUsersInWorkspace(wsId);
+        callback?.({
+          success: true,
+          workspaceId: wsId,
+          onlineUserIds,
+        });
+      } catch (err) {
+        callback?.({ success: false, message: err.message });
+      }
     });
 
     // Room join: Conversation (authorizes participant)
@@ -90,6 +153,48 @@ export function initSockets(io, options = {}) {
     // Room leave: Thread
     socket.on('chat:leave:thread', ({ threadId }) => {
       if (threadId) socket.leave(`thread:${threadId}`);
+    });
+
+    // Typing Indicators: Start typing (scoped to active chat room)
+    socket.on('chat:typing:start', ({ channelId, conversationId }) => {
+      if (!userId) return;
+      const targetRoom = channelId
+        ? `channel:${channelId}`
+        : conversationId
+        ? `conversation:${conversationId}`
+        : null;
+      if (!targetRoom) return;
+
+      // Ensure user is authorized & has joined target room
+      if (!socket.rooms.has(targetRoom)) return;
+
+      // Broadcast to room excluding sender; client-supplied userId is strictly ignored
+      socket.to(targetRoom).emit('chat:typing:update', {
+        userId,
+        isTyping: true,
+        channelId: channelId || null,
+        conversationId: conversationId || null,
+      });
+    });
+
+    // Typing Indicators: Stop typing (scoped to active chat room)
+    socket.on('chat:typing:stop', ({ channelId, conversationId }) => {
+      if (!userId) return;
+      const targetRoom = channelId
+        ? `channel:${channelId}`
+        : conversationId
+        ? `conversation:${conversationId}`
+        : null;
+      if (!targetRoom) return;
+
+      if (!socket.rooms.has(targetRoom)) return;
+
+      socket.to(targetRoom).emit('chat:typing:update', {
+        userId,
+        isTyping: false,
+        channelId: channelId || null,
+        conversationId: conversationId || null,
+      });
     });
 
     // Event: Send Message via WebSocket
@@ -187,9 +292,20 @@ export function initSockets(io, options = {}) {
       }
     });
 
-    // Handle clean disconnect
+    // Handle clean disconnect with multi-socket presence tracking
     socket.on('disconnect', (reason) => {
       console.log(`[Socket.IO] Client disconnected: ${socket.id} (Reason: ${reason})`);
+      const result = presenceManager.removeSocket(socket.id);
+      if (result.isLastSocket && result.userId) {
+        // Broadcast offline status to all workspaces the user participated in
+        for (const wsId of result.workspaces) {
+          io.to(`workspace:${wsId}`).emit('presence:update', {
+            userId: result.userId,
+            status: 'offline',
+            lastSeenAt: result.lastSeenAt,
+          });
+        }
+      }
     });
   });
 

@@ -50,6 +50,17 @@ export const ChatPage = () => {
   const [errorBanner, setErrorBanner] = useState('');
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
 
+  // Phase 4I-D: Realtime Connection, Presence & Typing
+  const [connectionState, setConnectionState] = useState(realtimeService.getConnectionState());
+  const [onlineUserIds, setOnlineUserIds] = useState(new Set());
+  const [typingUsers, setTypingUsers] = useState({});
+  const typingTimeoutRef = useRef(null);
+  const isTypingRef = useRef(false);
+  const selectedChatRef = useRef(selectedChat);
+  useEffect(() => {
+    selectedChatRef.current = selectedChat;
+  }, [selectedChat]);
+
   const messagesEndRef = useRef(null);
   const threadEndRef = useRef(null);
 
@@ -235,7 +246,114 @@ export const ChatPage = () => {
     }
   };
 
-  // 5. Realtime Socket.IO Connection & Event Handlers
+  // 5. Connection State & Presence Lifecycles
+  useEffect(() => {
+    return realtimeService.onConnectionStateChange((state) => {
+      setConnectionState(state);
+    });
+  }, []);
+
+  // 6. Workspace Presence & Reconnection
+  useEffect(() => {
+    if (!activeWorkspaceId) return;
+    const socket = realtimeService.connect();
+    if (!socket) return;
+
+    const subscribeWorkspacePresence = () => {
+      socket.emit('presence:subscribe', { workspaceId: activeWorkspaceId }, (res) => {
+        if (res?.success && Array.isArray(res.onlineUserIds)) {
+          setOnlineUserIds(new Set(res.onlineUserIds));
+        }
+      });
+    };
+
+    subscribeWorkspacePresence();
+
+    const handlePresenceUpdate = ({ userId, status }) => {
+      if (!userId) return;
+      setOnlineUserIds((prev) => {
+        const next = new Set(prev);
+        if (status === 'online') {
+          next.add(userId);
+        } else {
+          next.delete(userId);
+        }
+        return next;
+      });
+    };
+
+    const handleReconnect = () => {
+      subscribeWorkspacePresence();
+      if (selectedChatRef.current) {
+        const cur = selectedChatRef.current;
+        const roomEvent = cur.type === 'channel' ? 'chat:join:channel' : 'chat:join:conversation';
+        const param = cur.type === 'channel' ? { channelId: cur.data._id } : { conversationId: cur.data._id };
+        socket.emit(roomEvent, param);
+      }
+      setTypingUsers({});
+    };
+
+    socket.on('presence:update', handlePresenceUpdate);
+    socket.io?.on('reconnect', handleReconnect);
+
+    return () => {
+      socket.off('presence:update', handlePresenceUpdate);
+      socket.io?.off('reconnect', handleReconnect);
+      socket.emit('chat:leave:workspace', { workspaceId: activeWorkspaceId });
+    };
+  }, [activeWorkspaceId]);
+
+  // Typing helper: stop typing and clean up timers
+  const stopTyping = useCallback(() => {
+    if (typingTimeoutRef.current) {
+      clearTimeout(typingTimeoutRef.current);
+      typingTimeoutRef.current = null;
+    }
+    if (isTypingRef.current && selectedChat) {
+      isTypingRef.current = false;
+      const socket = realtimeService.getSocket();
+      if (socket && socket.connected) {
+        const param =
+          selectedChat.type === 'channel'
+            ? { channelId: selectedChat.data._id }
+            : { conversationId: selectedChat.data._id };
+        socket.emit('chat:typing:stop', param);
+      }
+    }
+  }, [selectedChat]);
+
+  // Composer typing input handler (debounced start/stop)
+  const handleComposerChange = (e) => {
+    const val = e.target.value;
+    setMessageInput(val);
+
+    if (!selectedChat) return;
+    const socket = realtimeService.getSocket();
+    if (!socket || !socket.connected) return;
+
+    const param =
+      selectedChat.type === 'channel'
+        ? { channelId: selectedChat.data._id }
+        : { conversationId: selectedChat.data._id };
+
+    if (!isTypingRef.current && val.trim().length > 0) {
+      isTypingRef.current = true;
+      socket.emit('chat:typing:start', param);
+    }
+
+    if (typingTimeoutRef.current) {
+      clearTimeout(typingTimeoutRef.current);
+    }
+
+    typingTimeoutRef.current = setTimeout(() => {
+      if (isTypingRef.current) {
+        isTypingRef.current = false;
+        socket.emit('chat:typing:stop', param);
+      }
+    }, 2500);
+  };
+
+  // 7. Realtime Socket.IO Connection & Event Handlers
   useEffect(() => {
     const socket = realtimeService.connect();
     if (!socket || !selectedChat) return;
@@ -291,21 +409,56 @@ export const ChatPage = () => {
       );
     };
 
+    // Typing Update Handler (ephemeral event-driven)
+    const handleTypingUpdate = ({ userId, isTyping, channelId, conversationId }) => {
+      const isTargetChat =
+        (selectedChat.type === 'channel' && channelId === chatId) ||
+        (selectedChat.type === 'conversation' && conversationId === chatId);
+
+      if (!isTargetChat) return;
+      if (currentUser && userId === currentUser.id) return;
+
+      setTypingUsers((prev) => {
+        const next = { ...prev };
+        if (isTyping) {
+          next[userId] = true;
+        } else {
+          delete next[userId];
+        }
+        return next;
+      });
+
+      if (isTyping) {
+        setTimeout(() => {
+          setTypingUsers((prev) => {
+            if (!prev[userId]) return prev;
+            const next = { ...prev };
+            delete next[userId];
+            return next;
+          });
+        }, 3500);
+      }
+    };
+
     socket.on('chat:message:new', handleNewMessage);
     socket.on('chat:message:updated', handleMessageUpdated);
     socket.on('chat:message:deleted', handleMessageDeleted);
+    socket.on('chat:typing:update', handleTypingUpdate);
 
     return () => {
+      stopTyping();
       socket.emit(leaveEvent, roomParam);
       socket.off('chat:message:new', handleNewMessage);
       socket.off('chat:message:updated', handleMessageUpdated);
       socket.off('chat:message:deleted', handleMessageDeleted);
+      socket.off('chat:typing:update', handleTypingUpdate);
     };
-  }, [selectedChat, activeThreadRoot, scrollToBottom]);
+  }, [selectedChat, activeThreadRoot, scrollToBottom, currentUser, stopTyping]);
 
   // 6. Send Message Handler
   const handleSendMessage = async (e) => {
     e?.preventDefault();
+    stopTyping();
     const content = messageInput.trim();
     if (!content || !selectedChat || !activeWorkspaceId || isSending) return;
 
@@ -497,6 +650,26 @@ export const ChatPage = () => {
     return conversations.filter((conv) => getConversationTitle(conv).toLowerCase().includes(q));
   }, [conversations, searchQuery, getConversationTitle]);
 
+  // Phase 4I-D: Multi-user typing indicator calculation
+  const activeTypingUserIds = useMemo(() => {
+    return Object.keys(typingUsers)
+      .map(Number)
+      .filter((id) => Boolean(typingUsers[id]) && (!currentUser || id !== currentUser.id));
+  }, [typingUsers, currentUser]);
+
+  const typingIndicatorText = useMemo(() => {
+    const count = activeTypingUserIds.length;
+    if (count === 0) return '';
+    const names = activeTypingUserIds.map((id) => getMemberName(id));
+    if (count === 1) {
+      return `${names[0]} is typing...`;
+    }
+    if (count === 2) {
+      return `${names[0]} and ${names[1]} are typing...`;
+    }
+    return `${names[0]} and ${count - 1} others are typing...`;
+  }, [activeTypingUserIds, getMemberName]);
+
   return (
     <div className="chat-layout-root">
       {/* Error Alert Banner */}
@@ -614,17 +787,24 @@ export const ChatPage = () => {
                   filteredConversations.map((conv) => {
                     const isSelected = selectedChat?.type === 'conversation' && selectedChat.data._id === conv._id;
                     const title = getConversationTitle(conv);
+                    const partnerId = conv.participantIds?.find((id) => !currentUser || id !== currentUser.id);
+                    const isOnline = partnerId ? onlineUserIds.has(Number(partnerId)) : false;
+
                     return (
                       <button
                         key={conv._id}
                         type="button"
                         className={`chat-item-btn ${isSelected ? 'active' : ''}`}
                         onClick={() => {
+                          stopTyping();
                           setSelectedChat({ type: 'conversation', data: conv });
                           setIsMobileSidebarOpen(false);
                         }}
                       >
-                        <Avatar name={title} size="xs" />
+                        <div className="chat-avatar-presence-wrap">
+                          <Avatar name={title} size="xs" />
+                          <span className={`chat-presence-indicator-dot ${isOnline ? 'online' : 'offline'}`} />
+                        </div>
                         <span className="chat-item-label">{title}</span>
                       </button>
                     );
@@ -660,6 +840,25 @@ export const ChatPage = () => {
                         ? 'Group Chat'
                         : 'Direct Message'}
                     </Badge>
+                    {selectedChat.type === 'conversation' && (() => {
+                      const partnerId = selectedChat.data.participantIds?.find((id) => !currentUser || id !== currentUser.id);
+                      const isOnline = partnerId ? onlineUserIds.has(Number(partnerId)) : false;
+                      return (
+                        <span className={`chat-header-presence-text ${isOnline ? 'online' : 'offline'}`}>
+                          {isOnline ? '● Online' : '○ Offline'}
+                        </span>
+                      );
+                    })()}
+                    <div className={`chat-connection-status ${connectionState}`} title={`Realtime: ${connectionState}`}>
+                      <span className="chat-connection-dot" />
+                      <span>
+                        {connectionState === 'connected'
+                          ? 'Connected'
+                          : connectionState === 'reconnecting'
+                          ? 'Reconnecting…'
+                          : 'Offline'}
+                      </span>
+                    </div>
                   </div>
                   {selectedChat.data.description && (
                     <p className="chat-header-desc">{selectedChat.data.description}</p>
@@ -816,6 +1015,16 @@ export const ChatPage = () => {
 
               {/* MESSAGE COMPOSER */}
               <form className="chat-composer" onSubmit={handleSendMessage}>
+                {typingIndicatorText && (
+                  <div className="chat-typing-bar">
+                    <span className="chat-typing-dots">
+                      <span className="chat-typing-dot" />
+                      <span className="chat-typing-dot" />
+                      <span className="chat-typing-dot" />
+                    </span>
+                    <span>{typingIndicatorText}</span>
+                  </div>
+                )}
                 <textarea
                   className="chat-composer-textarea"
                   placeholder={
@@ -824,7 +1033,8 @@ export const ChatPage = () => {
                       : `Message ${getConversationTitle(selectedChat.data)}...`
                   }
                   value={messageInput}
-                  onChange={(e) => setMessageInput(e.target.value)}
+                  onChange={handleComposerChange}
+                  onBlur={stopTyping}
                   onKeyDown={(e) => {
                     if (e.key === 'Enter' && !e.shiftKey) {
                       e.preventDefault();

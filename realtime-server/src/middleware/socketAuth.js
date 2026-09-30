@@ -67,6 +67,8 @@ export function createSocketAuthMiddleware(options = {}) {
         name: user.name,
         email: user.email,
       };
+      // Store token internally on socket for authoritative workspace permission validation
+      socket.data.token = token.trim();
 
       return next();
     } catch (err) {
