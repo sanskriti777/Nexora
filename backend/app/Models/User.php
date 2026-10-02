@@ -78,4 +78,9 @@ class User extends Authenticatable
     {
         return $this->hasMany(TaskComment::class);
     }
+
+    public function notifications()
+    {
+        return $this->morphMany(Notification::class, 'notifiable')->orderBy('created_at', 'desc');
+    }
 }

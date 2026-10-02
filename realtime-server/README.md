@@ -95,11 +95,74 @@ Copy `.env.example` to `.env` and configure:
 |---|---|---|
 | `PORT` | `8002` | Port for the realtime Express and Socket.IO server |
 | `MONGODB_URI` | `mongodb://127.0.0.1:27017/nexora_chat` | MongoDB connection string |
+| `REDIS_URL` | `redis://127.0.0.1:6379` | Redis server connection string |
 | `LARAVEL_API_URL` | `http://127.0.0.1:8001` | Laravel backend base URL for auth validation |
 | `FRONTEND_URL` | `http://localhost:5173` | Allowed CORS frontend origin |
+
+## Distributed Realtime & Redis Integration
+
+### Redis Role vs. MongoDB Role
+
+- **MongoDB (Persistence Source of Truth)**:
+  - Stores all chat history, conversations, channels, threads, and reactions persistently.
+  - Redis never replaces MongoDB as the persistent data store.
+- **Redis (Realtime Coordination & Scalability)**:
+  - Socket.IO cross-instance event distribution via `@socket.io/redis-adapter` (pub/sub).
+  - Distributed presence tracking across multi-process or multi-server deployments (`nexora:presence:user:{userId}` and `nexora:presence:ws:{workspaceId}`).
+  - Ephemeral coordination; no chat messages or business entities are persisted in Redis.
+
+### Graceful Fallback Mode (Redis Unavailable)
+
+If Redis is offline or unreachable:
+1. The server logs a clear notification: `[Redis] Unavailable (...) — running realtime server in single-node fallback mode.`
+2. The Socket.IO server continues operating seamlessly using its default in-memory adapter.
+3. Single-node chat messaging, presence, and typing indicators remain 100% operational.
+4. The server avoids infinite reconnect crash loops and continues serving HTTP and WebSocket traffic.
+
+### Health Endpoint (`GET /health`)
+
+The health endpoint provides real-time status for infrastructure components:
+- **Both Connected (Distributed Mode)**:
+  ```json
+  {
+    "status": "ok",
+    "service": "nexora-realtime",
+    "mongo": "connected",
+    "mongodb": "connected",
+    "redis": "connected"
+  }
+  ```
+- **Redis Offline (Single-Node Fallback Mode)**:
+  ```json
+  {
+    "status": "degraded",
+    "service": "nexora-realtime",
+    "mongo": "connected",
+    "mongodb": "connected",
+    "redis": "unavailable"
+  }
+  ```
+
+### Running Multiple Realtime Instances (Horizontal Scaling)
+
+When Redis is active, multiple Node.js Socket.IO instances can share traffic. To run two instances on the same host:
+
+1. Ensure Redis is running:
+   ```bash
+   redis-server
+   ```
+2. Start Instance 1 (Port 8002):
+   ```bash
+   PORT=8002 npm start
+   ```
+3. Start Instance 2 (Port 8003):
+   ```bash
+   PORT=8003 npm start
+   ```
+4. Clients connected to Instance 1 and Instance 2 in the same workspace or channel room will receive broadcasts published across instances through the Redis adapter.
 
 ## Available Scripts
 
 - `npm run dev` — Starts server with `nodemon` for development
 - `npm start` — Starts server in production mode
-- `npm test` — Executes full automated test suite (infrastructure + chat data layer)
+- `npm test` — Executes full automated test suite (infrastructure + chat data layer + presence/typing + Redis)

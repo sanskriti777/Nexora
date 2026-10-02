@@ -193,7 +193,7 @@ export const chatService = {
       }
     }
 
-    return await messageRepository.create({
+    const message = await messageRepository.create({
       workspaceId,
       conversationId: conversationId || null,
       channelId: channelId || null,
@@ -203,6 +203,66 @@ export const chatService = {
       replyToMessageId: replyToMessageId || null,
       threadId: threadId || null,
     });
+
+    // Notify other participant for Direct Messages
+    if (hasConv) {
+      const conv = await conversationRepository.findById(conversationId);
+      if (conv && conv.type === 'direct') {
+        const otherParticipantId = conv.participantIds.find(id => id !== authenticatedUserId);
+        if (otherParticipantId) {
+          try {
+            const laravelUrl = process.env.LARAVEL_API_URL || 'http://127.0.0.1:8001';
+            const secret = process.env.INTERNAL_SECRET || 'nexora-internal-secret';
+            fetch(`${laravelUrl}/api/internal/notifications`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'X-Internal-Secret': secret
+              },
+              body: JSON.stringify({
+                user_id: otherParticipantId,
+                workspace_id: workspaceId,
+                type: 'chat_dm',
+                title: 'New Direct Message',
+                message: `You received a new direct message`,
+                entity_type: 'conversation',
+                entity_id: conversationId,
+                data: { message_id: message.id }
+              })
+            }).catch(e => console.error('[Notification] Failed to create DM notification:', e));
+          } catch (e) {
+            console.error('[Notification] Failed to create DM notification:', e);
+          }
+        }
+      }
+    }
+
+    // Process mentions via Laravel
+    if (content.includes('@')) {
+      try {
+        const laravelUrl = process.env.LARAVEL_API_URL || 'http://127.0.0.1:8001';
+        const secret = process.env.INTERNAL_SECRET || 'nexora-internal-secret';
+        fetch(`${laravelUrl}/api/internal/chat/mentions`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Internal-Secret': secret
+          },
+          body: JSON.stringify({
+            workspace_id: workspaceId,
+            content: content,
+            sender_id: authenticatedUserId,
+            channel_id: channelId || null,
+            conversation_id: conversationId || null,
+            message_id: message.id
+          })
+        }).catch(e => console.error('[Notification] Failed to process mentions:', e));
+      } catch (e) {
+        console.error('[Notification] Failed to process mentions:', e);
+      }
+    }
+
+    return message;
   },
 
   /**

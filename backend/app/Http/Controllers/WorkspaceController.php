@@ -195,7 +195,7 @@ class WorkspaceController extends Controller
     /**
      * Add a member to the workspace.
      */
-    public function addMember(Request $request, int $id): JsonResponse
+    public function addMember(Request $request, int $id, \App\Services\NotificationService $notificationService): JsonResponse
     {
         $user = $request->user();
 
@@ -262,6 +262,18 @@ class WorkspaceController extends Controller
             'role_id' => $roleId,
             'joined_at' => now(),
         ]);
+
+        if ($targetUser->id !== $user->id) {
+            $notificationService->sendToUser(
+                $targetUser,
+                $workspace,
+                'team_member_added',
+                'Added to Workspace',
+                "You have been added to the workspace '{$workspace->name}'",
+                'workspace',
+                $workspace->id
+            );
+        }
 
         ActivityLog::create([
             'user_id' => $user->id,

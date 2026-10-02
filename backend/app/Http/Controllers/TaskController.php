@@ -144,7 +144,7 @@ class TaskController extends Controller
     /**
      * Create a new task within a verified project and workspace.
      */
-    public function store(Request $request): JsonResponse
+    public function store(Request $request, \App\Services\NotificationService $notificationService): JsonResponse
     {
         $user = $request->user();
 
@@ -217,6 +217,22 @@ class TaskController extends Controller
         // 6. Sync Assignees
         if (! empty($validated['assignees'])) {
             $task->assignees()->sync($validated['assignees']);
+
+            // Notify assignees (excluding creator if they assigned themselves)
+            $notifyUsers = User::whereIn('id', $validated['assignees'])
+                ->where('id', '!=', $user->id)
+                ->get();
+
+            $notificationService->sendToUsers(
+                $notifyUsers,
+                $workspace,
+                'task_assigned',
+                'New Task Assigned',
+                "You have been assigned to '{$task->title}'",
+                'task',
+                $task->id,
+                ['project_id' => $project->id]
+            );
         }
 
         // 7. Activity Log
@@ -289,7 +305,7 @@ class TaskController extends Controller
     /**
      * Update an existing task.
      */
-    public function update(Request $request, int $id): JsonResponse
+    public function update(Request $request, int $id, \App\Services\NotificationService $notificationService): JsonResponse
     {
         $user = $request->user();
 
@@ -349,6 +365,8 @@ class TaskController extends Controller
             $task->project_id = $destProject->id;
         }
 
+        $oldAssignees = $task->assignees()->pluck('users.id')->toArray();
+
         // Validate Assignees belong to workspace
         if (array_key_exists('assignees', $validated)) {
             if (! empty($validated['assignees'])) {
@@ -361,7 +379,26 @@ class TaskController extends Controller
                 }
             }
             $task->assignees()->sync($validated['assignees'] ?? []);
+
+            $newAssignees = array_diff($validated['assignees'] ?? [], $oldAssignees);
+            if (!empty($newAssignees)) {
+                $notifyUsers = User::whereIn('id', $newAssignees)
+                    ->where('id', '!=', $user->id)
+                    ->get();
+                $notificationService->sendToUsers(
+                    $notifyUsers,
+                    $workspace,
+                    'task_assigned',
+                    'New Task Assigned',
+                    "You have been assigned to '{$task->title}'",
+                    'task',
+                    $task->id,
+                    ['project_id' => $project->id]
+                );
+            }
         }
+
+        $changes = [];
 
         // Update fields
         if (isset($validated['title'])) {
@@ -370,20 +407,44 @@ class TaskController extends Controller
         if (array_key_exists('description', $validated)) {
             $task->description = $validated['description'];
         }
-        if (isset($validated['status'])) {
+        if (isset($validated['status']) && $validated['status'] !== $task->status) {
             $task->status = $validated['status'];
+            $changes['status'] = true;
         }
-        if (isset($validated['priority'])) {
+        if (isset($validated['priority']) && $validated['priority'] !== $task->priority) {
             $task->priority = $validated['priority'];
+            $changes['priority'] = true;
         }
-        if (array_key_exists('due_date', $validated)) {
+        if (array_key_exists('due_date', $validated) && $validated['due_date'] !== $task->due_date) {
             $task->due_date = $validated['due_date'];
+            $changes['due_date'] = true;
         }
         if (array_key_exists('team_id', $validated)) {
             $task->team_id = $validated['team_id'];
         }
 
         $task->save();
+
+        if (!empty($changes)) {
+            $notifyUserIds = $task->assignees()->where('users.id', '!=', $user->id)->pluck('users.id')->toArray();
+            if ($task->creator_id && $task->creator_id !== $user->id && !in_array($task->creator_id, $notifyUserIds)) {
+                $notifyUserIds[] = $task->creator_id;
+            }
+            if (!empty($notifyUserIds)) {
+                $notifyUsers = User::whereIn('id', $notifyUserIds)->get();
+                if ($notifyUsers->isNotEmpty()) {
+                    if (isset($changes['status'])) {
+                        $notificationService->sendToUsers($notifyUsers, $workspace, 'task_status_changed', 'Task Status Updated', "Status for '{$task->title}' changed to {$task->status}", 'task', $task->id, ['project_id' => $project->id]);
+                    }
+                    if (isset($changes['priority'])) {
+                        $notificationService->sendToUsers($notifyUsers, $workspace, 'task_priority_changed', 'Task Priority Updated', "Priority for '{$task->title}' changed to {$task->priority}", 'task', $task->id, ['project_id' => $project->id]);
+                    }
+                    if (isset($changes['due_date'])) {
+                        $notificationService->sendToUsers($notifyUsers, $workspace, 'task_due_date_changed', 'Task Due Date Updated', "Due date for '{$task->title}' changed", 'task', $task->id, ['project_id' => $project->id]);
+                    }
+                }
+            }
+        }
 
         // Activity Log
         ActivityLog::create([

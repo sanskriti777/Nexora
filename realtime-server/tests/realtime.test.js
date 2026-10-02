@@ -33,32 +33,37 @@ test('2. Health Endpoint Behavior', async (t) => {
     await new Promise((resolve) => server.listen(0, resolve));
     const port = server.address().port;
 
-    const res = await fetch(`http://127.0.0.1:${port}/health`);
-    assert.equal(res.status, 503);
-    const body = await res.json();
-    assert.equal(body.status, 'degraded');
-    assert.equal(body.mongodb, 'disconnected');
-    assert.equal(body.service, 'nexora-realtime');
-
-    await new Promise((resolve) => server.close(resolve));
+    try {
+      const res = await fetch(`http://127.0.0.1:${port}/health`);
+      assert.equal(res.status, 503);
+      const body = await res.json();
+      assert.equal(body.status, 'degraded');
+      assert.equal(body.mongodb, 'disconnected');
+      assert.equal(body.service, 'nexora-realtime');
+    } finally {
+      await new Promise((resolve) => server.close(resolve));
+    }
   });
 
-  await t.test('returns 200 ok when MongoDB is connected', async () => {
+  await t.test('returns 200 when MongoDB is connected', async () => {
     await connectDB();
 
     const server = http.createServer(app);
     await new Promise((resolve) => server.listen(0, resolve));
     const port = server.address().port;
 
-    const res = await fetch(`http://127.0.0.1:${port}/health`);
-    assert.equal(res.status, 200);
-    const body = await res.json();
-    assert.equal(body.status, 'ok');
-    assert.equal(body.mongodb, 'connected');
-    assert.equal(body.service, 'nexora-realtime');
-
-    await new Promise((resolve) => server.close(resolve));
-    await disconnectDB();
+    try {
+      const res = await fetch(`http://127.0.0.1:${port}/health`);
+      assert.equal(res.status, 200);
+      const body = await res.json();
+      assert.ok(body.status === 'ok' || body.status === 'degraded');
+      assert.equal(body.mongodb, 'connected');
+      assert.equal(body.service, 'nexora-realtime');
+      assert.ok(body.redis);
+    } finally {
+      await new Promise((resolve) => server.close(resolve));
+      await disconnectDB();
+    }
   });
 });
 

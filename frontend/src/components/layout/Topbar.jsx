@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import Breadcrumbs from './Breadcrumbs';
 import Avatar from '../ui/Avatar';
 import { useAuth } from '../../hooks/useAuth';
+import NotificationCenter from './NotificationCenter';
 
 /**
  * Enterprise Application Topbar Component
@@ -112,15 +113,8 @@ export const Topbar = ({ onToggleSidebar }) => {
           )}
         </div>
 
-        {/* Notifications Icon Button */}
-        <Link
-          to="/notifications"
-          className="topbar-icon-button"
-          title="Notifications"
-          aria-label="Notifications"
-        >
-          <span className="topbar-icon">🔔</span>
-        </Link>
+        {/* Notifications Component */}
+        <NotificationCenter />
 
         {/* User Menu Dropdown */}
         <div className="topbar-dropdown" ref={userMenuRef}>

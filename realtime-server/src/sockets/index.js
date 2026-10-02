@@ -24,6 +24,7 @@ export function initSockets(io, options = {}) {
     // Track active socket connection in in-memory presence manager
     if (userId) {
       presenceManager.addSocket(userId, socket.id);
+      socket.join(`user:${userId}`); // For direct private routing (like notifications)
     }
 
     // Infrastructure test event: realtime:ping -> realtime:pong
@@ -46,7 +47,7 @@ export function initSockets(io, options = {}) {
         }
 
         socket.join(`workspace:${wsId}`);
-        presenceManager.joinWorkspace(userId, wsId);
+        await presenceManager.joinWorkspace(userId, wsId);
 
         // Broadcast presence update to authorized workspace members
         io.to(`workspace:${wsId}`).emit('presence:update', {
@@ -54,7 +55,7 @@ export function initSockets(io, options = {}) {
           status: 'online',
         });
 
-        const onlineUserIds = presenceManager.getOnlineUsersInWorkspace(wsId);
+        const onlineUserIds = await presenceManager.getOnlineUsersInWorkspace(wsId);
         callback?.({ success: true, room: `workspace:${wsId}`, onlineUserIds });
       } catch (err) {
         callback?.({ success: false, message: err.message });
@@ -62,11 +63,11 @@ export function initSockets(io, options = {}) {
     });
 
     // Room leave: Workspace
-    socket.on('chat:leave:workspace', ({ workspaceId }) => {
+    socket.on('chat:leave:workspace', async ({ workspaceId }) => {
       if (workspaceId) {
         const wsId = Number(workspaceId);
         socket.leave(`workspace:${wsId}`);
-        presenceManager.leaveWorkspace(userId, wsId);
+        await presenceManager.leaveWorkspace(userId, wsId);
       }
     });
 
@@ -82,7 +83,7 @@ export function initSockets(io, options = {}) {
         }
 
         socket.join(`workspace:${wsId}`);
-        presenceManager.joinWorkspace(userId, wsId);
+        await presenceManager.joinWorkspace(userId, wsId);
 
         // Broadcast online presence to workspace
         io.to(`workspace:${wsId}`).emit('presence:update', {
@@ -90,7 +91,7 @@ export function initSockets(io, options = {}) {
           status: 'online',
         });
 
-        const onlineUserIds = presenceManager.getOnlineUsersInWorkspace(wsId);
+        const onlineUserIds = await presenceManager.getOnlineUsersInWorkspace(wsId);
         callback?.({
           success: true,
           workspaceId: wsId,
@@ -293,9 +294,9 @@ export function initSockets(io, options = {}) {
     });
 
     // Handle clean disconnect with multi-socket presence tracking
-    socket.on('disconnect', (reason) => {
+    socket.on('disconnect', async (reason) => {
       console.log(`[Socket.IO] Client disconnected: ${socket.id} (Reason: ${reason})`);
-      const result = presenceManager.removeSocket(socket.id);
+      const result = await presenceManager.removeSocket(socket.id);
       if (result.isLastSocket && result.userId) {
         // Broadcast offline status to all workspaces the user participated in
         for (const wsId of result.workspaces) {

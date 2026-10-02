@@ -29,6 +29,7 @@ import ProfilePage from '../pages/ProfilePage';
 import ModulePlaceholderPage from '../pages/ModulePlaceholderPage';
 import HealthPage from '../pages/HealthPage';
 import NotFoundPage from '../pages/NotFoundPage';
+import NotificationsPage from '../pages/NotificationsPage';
 
 /**
  * Root Redirector
@@ -104,17 +105,7 @@ export const AppRoutes = () => {
               />
             }
           />
-          <Route
-            path="notifications"
-            element={
-              <ModulePlaceholderPage
-                title="Notifications"
-                subtitle="Workspace alerts, assignment mentions, and status changes."
-                icon="🔔"
-                phaseNote="Notifications module will be implemented in the next phase."
-              />
-            }
-          />
+          <Route path="notifications" element={<NotificationsPage />} />
 
           {/* Insights Module Placeholders */}
           <Route

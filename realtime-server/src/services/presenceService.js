@@ -1,11 +1,18 @@
+import { isRedisReady, getRedisClient } from '../redis.js';
+
 /**
- * In-Memory Ephemeral Presence Manager
+ * Distributed & In-Memory Presence Manager
  *
- * Tracks active Socket.IO connections and user presence state in memory.
- * Designed for single-node deployments; Redis adapter will be introduced for multi-node.
+ * Tracks active Socket.IO connections and user presence state.
+ * Maintains instantaneous in-memory lookups for performance and backwards compatibility,
+ * and asynchronously synchronizes with Redis when available for multi-node clustering:
+ *   - nexora:presence:user:{userId} -> Set of active socket IDs
+ *   - nexora:presence:ws:{workspaceId} -> Set of active user IDs
+ *   - nexora:presence:last_seen:{userId} -> String timestamp
  *
  * Rule: Authenticated user identity (socket.data.user.id) is authoritative.
  * Rule: A user can have multiple sockets/devices. Only mark offline when all sockets disconnect.
+ * Rule: Presence is ephemeral and never written to MongoDB.
  */
 
 class PresenceManager {
@@ -42,6 +49,19 @@ class PresenceManager {
     socketSet.add(socketId);
     this.socketToUser.set(socketId, id);
 
+    if (isRedisReady()) {
+      try {
+        const redis = getRedisClient();
+        if (redis?.isOpen) {
+          const key = `nexora:presence:user:${id}`;
+          redis.sAdd(key, socketId).catch(() => {});
+          redis.expire(key, 86400).catch(() => {});
+        }
+      } catch (err) {
+        console.warn(`[Presence] Redis addSocket error: ${err.message}`);
+      }
+    }
+
     return {
       isFirstSocket,
       userId: id,
@@ -64,6 +84,19 @@ class PresenceManager {
       this.userWorkspaces.set(uId, wsSet);
     }
     wsSet.add(wsId);
+
+    if (isRedisReady()) {
+      try {
+        const redis = getRedisClient();
+        if (redis?.isOpen) {
+          const key = `nexora:presence:ws:${wsId}`;
+          redis.sAdd(key, String(uId)).catch(() => {});
+          redis.expire(key, 86400).catch(() => {});
+        }
+      } catch (err) {
+        console.warn(`[Presence] Redis joinWorkspace error: ${err.message}`);
+      }
+    }
   }
 
   /**
@@ -80,6 +113,17 @@ class PresenceManager {
       wsSet.delete(wsId);
       if (wsSet.size === 0) {
         this.userWorkspaces.delete(uId);
+      }
+    }
+
+    if (isRedisReady()) {
+      try {
+        const redis = getRedisClient();
+        if (redis?.isOpen) {
+          redis.sRem(`nexora:presence:ws:${wsId}`, String(uId)).catch(() => {});
+        }
+      } catch (err) {
+        console.warn(`[Presence] Redis leaveWorkspace error: ${err.message}`);
       }
     }
   }
@@ -110,27 +154,39 @@ class PresenceManager {
     }
 
     const remaining = socketSet ? socketSet.size : 0;
-    if (remaining === 0) {
-      this.userSockets.delete(userId);
-      const lastSeenAt = Date.now();
-      this.lastSeen.set(userId, lastSeenAt);
-      const workspaces = Array.from(this.userWorkspaces.get(userId) || []);
+    const workspaces = Array.from(this.userWorkspaces.get(userId) || []);
+    const isLast = remaining === 0;
+    const lastSeenAt = Date.now();
 
-      return {
-        isLastSocket: true,
-        userId,
-        status: 'offline',
-        lastSeenAt,
-        workspaces,
-      };
+    if (isLast) {
+      this.userSockets.delete(userId);
+      this.lastSeen.set(userId, lastSeenAt);
+    }
+
+    if (isRedisReady()) {
+      try {
+        const redis = getRedisClient();
+        if (redis?.isOpen) {
+          const userKey = `nexora:presence:user:${userId}`;
+          redis.sRem(userKey, socketId).catch(() => {});
+          if (isLast) {
+            redis.set(`nexora:presence:last_seen:${userId}`, String(lastSeenAt)).catch(() => {});
+            for (const wsId of workspaces) {
+              redis.sRem(`nexora:presence:ws:${wsId}`, String(userId)).catch(() => {});
+            }
+          }
+        }
+      } catch (err) {
+        console.warn(`[Presence] Redis removeSocket error: ${err.message}`);
+      }
     }
 
     return {
-      isLastSocket: false,
+      isLastSocket: isLast,
       userId,
-      status: 'online',
-      lastSeenAt: null,
-      workspaces: Array.from(this.userWorkspaces.get(userId) || []),
+      status: isLast ? 'offline' : 'online',
+      lastSeenAt: isLast ? lastSeenAt : null,
+      workspaces,
     };
   }
 

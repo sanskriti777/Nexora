@@ -71,4 +71,18 @@ Route::middleware('auth:sanctum')->group(function () {
 
     // Calendar endpoint
     Route::get('/calendar', [CalendarController::class, 'index']);
+
+    // Notifications endpoints
+    Route::get('/notifications', [\App\Http\Controllers\NotificationController::class, 'index']);
+    Route::get('/notifications/unread-count', [\App\Http\Controllers\NotificationController::class, 'unreadCount']);
+    Route::patch('/notifications/{notification}/read', [\App\Http\Controllers\NotificationController::class, 'markAsRead']);
+    Route::post('/notifications/read-all', [\App\Http\Controllers\NotificationController::class, 'markAllAsRead']);
+    Route::delete('/notifications/{notification}', [\App\Http\Controllers\NotificationController::class, 'destroy']);
 });
+
+// Internal bridge from Node.js (Realtime Server) to Laravel
+Route::post('/internal/notifications', [\App\Http\Controllers\NotificationController::class, 'storeInternal'])
+    ->middleware(\App\Http\Middleware\VerifyInternalSecret::class ?? 'api');
+
+Route::post('/internal/chat/mentions', [\App\Http\Controllers\NotificationController::class, 'processChatMentions'])
+    ->middleware(\App\Http\Middleware\VerifyInternalSecret::class ?? 'api');

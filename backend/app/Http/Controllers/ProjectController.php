@@ -358,7 +358,7 @@ class ProjectController extends Controller
     /**
      * Update project attributes.
      */
-    public function update(Request $request, int $id): JsonResponse
+    public function update(Request $request, int $id, \App\Services\NotificationService $notificationService): JsonResponse
     {
         $user = $request->user();
 
@@ -406,6 +406,21 @@ class ProjectController extends Controller
         ]);
 
         $project->update($validated);
+
+        // Notify relevant project members (excluding the actor)
+        $members = $project->members()->where('users.id', '!=', $user->id)->get();
+        if ($members->isNotEmpty()) {
+            $notificationService->sendToUsers(
+                $members,
+                $workspace,
+                'project_updated',
+                'Project Updated',
+                "Project '{$project->name}' has been updated",
+                'project',
+                $project->id,
+                ['project_id' => $project->id]
+            );
+        }
 
         // Log Activity
         ActivityLog::create([
@@ -473,7 +488,7 @@ class ProjectController extends Controller
     /**
      * Add a member to the project.
      */
-    public function addMember(Request $request, int $id): JsonResponse
+    public function addMember(Request $request, int $id, \App\Services\NotificationService $notificationService): JsonResponse
     {
         $user = $request->user();
 
@@ -528,6 +543,18 @@ class ProjectController extends Controller
             'user_id' => $targetUser->id,
             'role' => $validated['role'] ?? 'member',
         ]);
+
+        if ($targetUser->id !== $user->id) {
+            $notificationService->sendToUser(
+                $targetUser,
+                $workspace,
+                'project_member_added',
+                'Added to Project',
+                "You have been added to the project '{$project->name}'",
+                'project',
+                $project->id
+            );
+        }
 
         return response()->json([
             'success' => true,

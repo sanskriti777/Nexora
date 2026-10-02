@@ -35,4 +35,9 @@ return [
         ],
     ],
 
+    'realtime' => [
+        'url' => env('REALTIME_SERVER_URL', 'http://127.0.0.1:8002'),
+        'secret' => env('INTERNAL_SECRET', 'nexora-internal-secret'),
+    ],
+
 ];

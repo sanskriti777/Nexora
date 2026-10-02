@@ -393,7 +393,7 @@ class TeamController extends Controller
     /**
      * Add a member to the team.
      */
-    public function addMember(Request $request, int $id): JsonResponse
+    public function addMember(Request $request, int $id, \App\Services\NotificationService $notificationService): JsonResponse
     {
         $user = $request->user();
 
@@ -442,6 +442,18 @@ class TeamController extends Controller
             'team_id' => $team->id,
             'user_id' => $targetUser->id,
         ]);
+
+        if ($targetUser->id !== $user->id) {
+            $notificationService->sendToUser(
+                $targetUser,
+                $team->workspace,
+                'team_member_added',
+                'Added to Team',
+                "You have been added to the team '{$team->name}'",
+                'team',
+                $team->id
+            );
+        }
 
         ActivityLog::create([
             'user_id' => $user->id,
