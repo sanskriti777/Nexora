@@ -86,6 +86,11 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/attachments/{attachment}', [AttachmentController::class, 'show']);
     Route::get('/attachments/{attachment}/download', [AttachmentController::class, 'download']);
     Route::delete('/attachments/{attachment}', [AttachmentController::class, 'destroy']);
+
+    // Activity & Audit Log endpoints
+    Route::get('/activity', [\App\Http\Controllers\ActivityLogController::class, 'index']);
+    Route::get('/activity/filters', [\App\Http\Controllers\ActivityLogController::class, 'filters']);
+    Route::get('/activity/{id}', [\App\Http\Controllers\ActivityLogController::class, 'show']);
 });
 
 // Internal bridge from Node.js (Realtime Server) to Laravel

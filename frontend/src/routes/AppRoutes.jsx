@@ -30,6 +30,7 @@ import ModulePlaceholderPage from '../pages/ModulePlaceholderPage';
 import HealthPage from '../pages/HealthPage';
 import NotFoundPage from '../pages/NotFoundPage';
 import NotificationsPage from '../pages/NotificationsPage';
+import ActivityPage from '../pages/ActivityPage';
 
 /**
  * Root Redirector
@@ -119,17 +120,7 @@ export const AppRoutes = () => {
               />
             }
           />
-          <Route
-            path="activity"
-            element={
-              <ModulePlaceholderPage
-                title="Activity"
-                subtitle="Workspace audit log history and operational event trail."
-                icon="⏱️"
-                phaseNote="Activity module will be implemented in the next phase."
-              />
-            }
-          />
+          <Route path="activity" element={<ActivityPage />} />
 
           {/* System & User Modules */}
           <Route

@@ -489,7 +489,15 @@ export const DashboardPage = () => {
         </Card>
 
         {/* Recent Activity */}
-        <Card title="Recent Activity" subtitle="Workspace audit log trail">
+        <Card
+          title="Recent Activity"
+          subtitle="Workspace audit log trail"
+          actions={
+            <Link to="/activity" className="btn btn-secondary btn-sm">
+              View All
+            </Link>
+          }
+        >
           {recentActivity.length === 0 ? (
             <div className="activity-empty-box">
               <span className="activity-empty-icon" aria-hidden="true">⏱️</span>
