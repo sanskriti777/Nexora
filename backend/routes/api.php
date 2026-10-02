@@ -91,6 +91,12 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/activity', [\App\Http\Controllers\ActivityLogController::class, 'index']);
     Route::get('/activity/filters', [\App\Http\Controllers\ActivityLogController::class, 'filters']);
     Route::get('/activity/{id}', [\App\Http\Controllers\ActivityLogController::class, 'show']);
+
+    // Analytics endpoints
+    Route::get('/analytics/overview', [\App\Http\Controllers\AnalyticsController::class, 'overview']);
+    Route::get('/analytics/tasks', [\App\Http\Controllers\AnalyticsController::class, 'tasks']);
+    Route::get('/analytics/projects', [\App\Http\Controllers\AnalyticsController::class, 'projects']);
+    Route::get('/analytics/workload', [\App\Http\Controllers\AnalyticsController::class, 'workload']);
 });
 
 // Internal bridge from Node.js (Realtime Server) to Laravel
