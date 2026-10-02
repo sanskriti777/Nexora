@@ -4,6 +4,7 @@ import projectService from '../services/projectService';
 import Button from '../components/ui/Button';
 import Badge from '../components/ui/Badge';
 import Card from '../components/ui/Card';
+import AttachmentList from '../components/attachments/AttachmentList';
 
 export const ProjectDetailsPage = () => {
   const { projectId } = useParams();
@@ -337,6 +338,13 @@ export const ProjectDetailsPage = () => {
         >
           Activity
         </button>
+        <button
+          type="button"
+          className={`project-tab-btn ${activeTab === 'attachments' ? 'active' : ''}`}
+          onClick={() => setActiveTab('attachments')}
+        >
+          Attachments
+        </button>
       </div>
 
       {/* Tab Content */}
@@ -501,6 +509,12 @@ export const ProjectDetailsPage = () => {
               ))}
             </ul>
           )}
+        </Card>
+      )}
+
+      {activeTab === 'attachments' && (
+        <Card className="project-section-card">
+          <AttachmentList attachableType="project" attachableId={project.id} />
         </Card>
       )}
 

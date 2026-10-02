@@ -5,6 +5,7 @@ import projectService from '../services/projectService';
 import Button from '../components/ui/Button';
 import Badge from '../components/ui/Badge';
 import Card from '../components/ui/Card';
+import AttachmentList from '../components/attachments/AttachmentList';
 
 export const TaskDetailsPage = () => {
   const { taskId } = useParams();
@@ -356,6 +357,11 @@ export const TaskDetailsPage = () => {
               </div>
             </Card>
           )}
+
+          {/* Task Attachments Card */}
+          <Card className="task-section-card">
+            <AttachmentList attachableType="task" attachableId={task.id} />
+          </Card>
         </div>
 
         {/* Right Column: Metadata Sidebar */}

@@ -62,4 +62,9 @@ class Project extends Model
     {
         return $this->hasMany(Task::class);
     }
+
+    public function attachments(): HasMany
+    {
+        return $this->hasMany(Attachment::class, 'entity_id')->where('entity_type', 'project');
+    }
 }

@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\AttachmentController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\CalendarController;
 use App\Http\Controllers\DashboardController;
@@ -78,6 +79,13 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::patch('/notifications/{notification}/read', [\App\Http\Controllers\NotificationController::class, 'markAsRead']);
     Route::post('/notifications/read-all', [\App\Http\Controllers\NotificationController::class, 'markAllAsRead']);
     Route::delete('/notifications/{notification}', [\App\Http\Controllers\NotificationController::class, 'destroy']);
+
+    // Attachments endpoints
+    Route::get('/attachments', [AttachmentController::class, 'index']);
+    Route::post('/attachments', [AttachmentController::class, 'store']);
+    Route::get('/attachments/{attachment}', [AttachmentController::class, 'show']);
+    Route::get('/attachments/{attachment}/download', [AttachmentController::class, 'download']);
+    Route::delete('/attachments/{attachment}', [AttachmentController::class, 'destroy']);
 });
 
 // Internal bridge from Node.js (Realtime Server) to Laravel
