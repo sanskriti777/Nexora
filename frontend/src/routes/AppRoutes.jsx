@@ -31,6 +31,7 @@ import HealthPage from '../pages/HealthPage';
 import NotFoundPage from '../pages/NotFoundPage';
 import NotificationsPage from '../pages/NotificationsPage';
 import ActivityPage from '../pages/ActivityPage';
+import AnalyticsPage from '../pages/AnalyticsPage';
 
 /**
  * Root Redirector
@@ -108,18 +109,8 @@ export const AppRoutes = () => {
           />
           <Route path="notifications" element={<NotificationsPage />} />
 
-          {/* Insights Module Placeholders */}
-          <Route
-            path="analytics"
-            element={
-              <ModulePlaceholderPage
-                title="Analytics"
-                subtitle="Workspace velocity, project throughput, and operational metrics."
-                icon="📈"
-                phaseNote="Analytics module will be implemented in the next phase."
-              />
-            }
-          />
+          {/* Insights Module */}
+          <Route path="analytics" element={<AnalyticsPage />} />
           <Route path="activity" element={<ActivityPage />} />
 
           {/* System & User Modules */}
